@@ -1,5 +1,5 @@
 load(
-    "//builddefs/test/java/junit:junit5.bzl",
+    "//java:junit5.bzl",
     "junit5_test_library",
     "junit5_test",
     "junit5_test_suite",

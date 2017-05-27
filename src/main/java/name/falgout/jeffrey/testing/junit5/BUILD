@@ -1,4 +1,4 @@
-load("//builddefs/test/java/junit:junit5.bzl", "junit5_test_library")
+load("///java/:junit5.bzl", "junit5_test_library")
 
 package(
     default_testonly = 1,

@@ -1,6 +1,6 @@
 workspace(name = "name_falgout_jeffrey_testing_bazel_junit5")
 
-load("//builddefs/test/java/junit:junit5.bzl", "junit5_dependencies")
+load("//java:junit5.bzl", "junit5_dependencies")
 
 junit5_dependencies(
     artifacts = [
