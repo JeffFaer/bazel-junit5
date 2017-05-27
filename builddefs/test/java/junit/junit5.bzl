@@ -1,4 +1,5 @@
 TEST_SIZES = [
+    None,
     "small",
     "medium",
     "large",
@@ -77,15 +78,12 @@ def junit5_test_library(srcs, name=None, deps=[], _junit5_test_deps=JUNIT5_TEST_
       **kwargs
   )
 
-def junit5_test_suites(deps, sizes=None, **kwargs):
-  if sizes == None:
-    sizes = TEST_SIZES + [ None ]
-
+def junit5_test_suites(deps, sizes=TEST_SIZES, **kwargs):
   for size in sizes:
     junit5_test_suite(size, deps, **kwargs)
 
 def junit5_test_suite(size, deps, tags=[], exclude_tags=[], src_dir=None, _junit5_runtime_deps=JUNIT5_RUNTIME_DEPS):
-  if size != None and not size in TEST_SIZES:
+  if not size in TEST_SIZES:
     fail("%s is not a valid test size." % size)
 
   flags = [
@@ -134,10 +132,12 @@ def __get_tag_flags(size, tags, exclude_tags):
 
 def __get_size_flags(size):
   if size == None:
-    return [ "-T %s" % s for s in TEST_SIZES ]
+    self_flag = []
+  else:
+    self_flag = [ "-t %s" % size ]
 
   index = TEST_SIZES.index(size)
-  return [ "-t %s" % size ] + [ "-T %s" % s for s in TEST_SIZES[index+1:]]
+  return self_flag + [ "-T %s" % s for s in TEST_SIZES[index+1:]]
 
 def __get_suite_name(size, tags, exclude_tags):
   size_string = size or "Unlabelled"
