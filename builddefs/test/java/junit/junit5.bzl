@@ -63,13 +63,9 @@ def junit5_dependency(component, artifact, version):
   )
 
 """
-Automatically adds JUnit5 compile dependencies so you don't have to. It name is not given, it
-defaults to junit5_tests.
+Automatically adds JUnit5 compile dependencies so you don't have to.
 """
-def junit5_test_library(srcs, name=None, deps=[], _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
-  if name == None:
-    name = "junit5_tests"
-
+def junit5_test_library(name, srcs, deps=[], _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
   native.java_library(
       name = name,
       srcs = srcs,
@@ -78,27 +74,68 @@ def junit5_test_library(srcs, name=None, deps=[], _junit5_test_deps=JUNIT5_TEST_
       **kwargs
   )
 
-def junit5_test_suites(deps, sizes=TEST_SIZES, **kwargs):
+def junit5_test_suites(sizes=TEST_SIZES, **kwargs):
   for size in sizes:
-    junit5_test_suite(size, deps, **kwargs)
+    junit5_test_suite(size, **kwargs)
 
-def junit5_test_suite(size, deps, tags=[], exclude_tags=[], src_dir=None, _junit5_runtime_deps=JUNIT5_RUNTIME_DEPS):
+def junit5_test_suite(size, deps=[], runtime_deps=[], src_dir=None, **kwargs):
   if not size in TEST_SIZES:
     fail("%s is not a valid test size." % size)
 
-  flags = [
+  selection_flags = [
     "--select-package %s" % __get_java_package(PACKAGE_NAME, src_dir)
-  ] + __get_tag_flags(size, tags, exclude_tags)
+  ] + __get_size_flags(size)
 
-  name = __get_suite_name(size, tags, exclude_tags)
+  size_string = size or "Unlabelled"
+  suite_name = size_string.capitalize() + "Tests"
+
+  __junit5_test(
+      base_name = suite_name,
+      selection_flags = selection_flags,
+      size = size,
+      runtime_deps = deps + runtime_deps,
+      **kwargs
+  )
+
+def junit5_test(base_name, srcs, deps=[], src_dir=None, _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
+  java_package = __get_java_package(PACKAGE_NAME, src_dir)
+  class_names = __get_class_names(java_package, srcs)
+  selection_flags = [ "--select-class %s" % class_name for class_name in class_names ]
+
+  __junit5_test(
+      base_name = base_name,
+      selection_flags = selection_flags,
+      srcs = srcs,
+      deps = deps + _junit5_test_deps,
+      **kwargs
+  )
+
+def __junit5_test(
+    base_name,
+    selection_flags,
+    name=None,
+    tags=[],
+    exclude_tags=[],
+    runtime_deps = [],
+    _junit5_runtime_deps=JUNIT5_RUNTIME_DEPS,
+    **kwargs):
+  if name == None:
+    name = base_name
+    for tag in sorted(tags):
+      name += "+" + tag
+
+    for tag in sorted(exclude_tags):
+      name += "-" + tag
+
+  flags = selection_flags + __get_tag_flags(tags, exclude_tags)
 
   native.java_test(
       name = name,
-      size = size,
       args = flags,
       main_class = "org.junit.platform.console.ConsoleLauncher",
       use_testrunner = False,
-      runtime_deps = _junit5_runtime_deps + deps,
+      runtime_deps = runtime_deps + _junit5_runtime_deps,
+      **kwargs
   )
 
 def __get_java_package(dir_path, src_dir):
@@ -119,16 +156,10 @@ def __get_java_package(dir_path, src_dir):
   fail("Could not find a src root: %s in path: %s" % (src_dirs, dir_path))
 
 def __prefix_index(haystack, needle):
-  if haystack.startswith(needle):
-    return len(needle)
+  if needle in haystack:
+    return haystack.index(needle) + len(needle)
   else:
     return -1
-
-
-def __get_tag_flags(size, tags, exclude_tags):
-  return (__get_size_flags(size) +
-   [ "-t %s" % tag for tag in tags ] +
-   [ "-T %s" % tag for tag in exclude_tags ])
 
 def __get_size_flags(size):
   if size == None:
@@ -139,14 +170,17 @@ def __get_size_flags(size):
   index = TEST_SIZES.index(size)
   return self_flag + [ "-T %s" % s for s in TEST_SIZES[index+1:]]
 
-def __get_suite_name(size, tags, exclude_tags):
-  size_string = size or "Unlabelled"
-  base_name = size_string.capitalize() + "Tests"
+def __get_tag_flags(tags, exclude_tags):
+  return [ "-t %s" % tag for tag in tags ] + [ "-T %s" % tag for tag in exclude_tags ]
 
-  for tag in sorted(tags):
-    base_name += "+" + tag
+def __get_class_names(java_package, srcs):
+  class_names = []
+  tail = ".java"
+  for src in srcs:
+    if not src.endswith(tail):
+      continue
 
-  for tag in sorted(exclude_tags):
-    base_name += "-" + tag
+    stripped_src = src[:len(src) - len(tail)]
+    class_names.append("%s.%s" % (java_package, stripped_src))
 
-  return base_name
+  return class_names
