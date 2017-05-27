@@ -1,4 +1,4 @@
-workspace(name = "name_falgout_jeffrey_testing_bazel_junit5")
+workspace(name = "name_falgout_jeffrey_junit5")
 
 load("//java:junit5.bzl", "junit5_dependencies")
 
