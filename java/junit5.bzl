@@ -5,7 +5,7 @@ All of the test targets in this file support tags= and exclude_tags= parameters.
 translated to JUnit 5 @Tag filters.
 
 junit5_test_suite and junit5_test have the following naming convention:
-    ${base_name}+${tags[0]}+${tags[1]}-${exclude_tags[0]}-${exclude_tags[1]}
+    ${base_name}+${tags[0]}+${tags[1]}...+${tags[n]}-${exclude_tags[0]}-${exclude_tags[1]}...-${exclude_tags[m]}
 
 This can be overridden by explicitly supplying name = "YourTestName" to the target.
 """
@@ -34,45 +34,53 @@ JUNIT5_ARTIFACT_ID_PATTERNS = {
 }
 
 JUNIT5_TEST_DEPS = [
-    "//external:junit5_jupiter_api",
+    "//third_party:junit5_jupiter_api",
 ]
 
 JUNIT5_RUNTIME_DEPS = [
-    "//external:junit5_jupiter_engine",
-    "//external:junit5_platform_commons",
-    "//external:junit5_platform_console",
-    "//external:junit5_platform_engine",
-    "//external:junit5_platform_launcher",
-    "//external:opentest4j",
+    "//third_party:junit5_jupiter_engine",
+    "//third_party:junit5_platform_commons",
+    "//third_party:junit5_platform_console",
+    "//third_party:junit5_platform_engine",
+    "//third_party:junit5_platform_launcher",
+    "//third_party:opentest4j",
 ]
 
-def junit5_dependencies(component, artifacts, version):
+def junit5_maven_dependencies(component, artifacts, version):
   """
-  Create a dependency for each artifact. Each will be available as
-  //external:junit5_${component}_${artifact}
+  Create a maven_jar for each artifact.
   """
   for artifact in artifacts:
-    junit5_dependency(component, artifact, version)
+    junit5_maven_dependency(component, artifact, version)
 
-def junit5_dependency(component, artifact, version):
+def junit5_maven_dependency(component, artifact, version):
   """
-  Create a dependency on a JUnit 5 maven jar. It will be available as
-  //external:junit5_${component}_${artifact}
+  Create a dependency on a JUnit 5 maven jar.
   """
   if not component in JUNIT5_COMPONENTS:
     fail("%s is not a JUnit 5 component." % component)
 
   groupId = JUNIT5_GROUP_IDS[component]
   artifactId = JUNIT5_ARTIFACT_ID_PATTERNS[component] % artifact
-  maven_name = "%s_%s" % (groupId.replace('.', '_'), artifactId.replace('-', '_'))
   native.maven_jar(
-      name = maven_name,
+      name = _get_maven_name(component, artifact),
       artifact = "%s:%s:%s" % (groupId, artifactId, version),
   )
 
-  native.bind(
+def _get_maven_name(component, artifact):
+  groupId = JUNIT5_GROUP_IDS[component]
+  artifactId = JUNIT5_ARTIFACT_ID_PATTERNS[component] % artifact
+  return "%s_%s" % (groupId.replace('.', '_'), artifactId.replace('-', '_'))
+
+def junit5_java_libraries(component, artifacts, **kwargs):
+  for artifact in artifacts:
+    junit5_java_library(component, artifact, **kwargs)
+
+def junit5_java_library(component, artifact, **kwargs):
+  native.java_library(
       name = "junit5_%s_%s" % (component, artifact),
-      actual = "@%s//jar" % maven_name,
+      exports = [ "@%s//jar" % _get_maven_name(component, artifact) ],
+      **kwargs
   )
 
 def junit5_test_library(name, srcs, deps=[], _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
@@ -109,16 +117,16 @@ def junit5_test_suite(size, src_dir=None, **kwargs):
     fail("%s is not a valid test size." % size)
 
   selection_flags = [
-    "--select-package %s" % __get_java_package(PACKAGE_NAME, src_dir)
+    "--select-package %s" % _get_java_package(PACKAGE_NAME, src_dir)
   ]
 
   if size != "all":
-    selection_flags += __get_size_flags(size)
+    selection_flags += _get_size_flags(size)
 
   size_string = size or "Unlabelled"
   suite_name = size_string.capitalize() + "Tests"
 
-  __junit5_test(
+  _junit5_test(
       base_name = suite_name,
       selection_flags = selection_flags,
       size = size if size != "all" else None,
@@ -129,18 +137,18 @@ def junit5_test(base_name, srcs, src_dir=None, **kwargs):
   """
   Run the JUnit 5 tests in srcs.
   """
-  java_package = __get_java_package(PACKAGE_NAME, src_dir)
-  class_names = __get_class_names(java_package, srcs)
+  java_package = _get_java_package(PACKAGE_NAME, src_dir)
+  class_names = _get_class_names(java_package, srcs)
   selection_flags = [ "--select-class %s" % class_name for class_name in class_names ]
 
-  __junit5_test(
+  _junit5_test(
       base_name = base_name,
       selection_flags = selection_flags,
       srcs = srcs,
       **kwargs
   )
 
-def __junit5_test(
+def _junit5_test(
     base_name,
     selection_flags,
     name=None,
@@ -159,7 +167,7 @@ def __junit5_test(
     for tag in sorted(exclude_tags):
       name += "-" + tag
 
-  flags = selection_flags + __get_tag_flags(tags, exclude_tags)
+  flags = selection_flags + _get_tag_flags(tags, exclude_tags)
 
   native.java_test(
       name = name,
@@ -171,7 +179,7 @@ def __junit5_test(
       **kwargs
   )
 
-def __get_java_package(dir_path, src_dir):
+def _get_java_package(dir_path, src_dir):
   if src_dir == None:
     src_dirs = [ "src/main/java/", "src/test/java/", "java/", "javatests/" ]
   else:
@@ -181,20 +189,20 @@ def __get_java_package(dir_path, src_dir):
     src_dirs = [ src_dir ]
 
   for dir in src_dirs:
-    index = __prefix_index(dir_path, dir)
+    index = _prefix_index(dir_path, dir)
     if index >= 0:
       sub_path = dir_path[index:]
       return sub_path.replace('/', '.')
 
   fail("Could not find a src root: %s in path: %s" % (src_dirs, dir_path))
 
-def __prefix_index(haystack, needle):
+def _prefix_index(haystack, needle):
   if needle in haystack:
     return haystack.index(needle) + len(needle)
   else:
     return -1
 
-def __get_size_flags(size):
+def _get_size_flags(size):
   if size == None:
     self_flag = []
   else:
@@ -203,10 +211,10 @@ def __get_size_flags(size):
   index = TEST_SIZES.index(size)
   return self_flag + [ "-T %s" % s for s in TEST_SIZES[index+1:]]
 
-def __get_tag_flags(tags, exclude_tags):
+def _get_tag_flags(tags, exclude_tags):
   return [ "-t %s" % tag for tag in tags ] + [ "-T %s" % tag for tag in exclude_tags ]
 
-def __get_class_names(java_package, srcs):
+def _get_class_names(java_package, srcs):
   class_names = []
   tail = ".java"
   for src in srcs:

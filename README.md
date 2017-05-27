@@ -7,14 +7,8 @@ Put the following on your WORKSPACE
 git_repository(
     name = "name_falgout_jeffrey_junit5",
     remote = "https://github.com/JeffreyFalgout/bazel-junit5.git",
-    tag = "v0.2.0",
+    tag = "v0.3.0",
 )
 
 load("@name_falgout_jeffrey_junit5//java:junit5.bzl", "junit5_dependencies", etc)
-
-# If you want to depend on the annotations as //external:junit5-annotations
-bind(
-    name = "junit5-annotations",
-    actual = "@name_falgout_jeffrey_junit5//src/main/java/name/falgout/jeffrey/testing/junit5:annotations",
-)
 ````
