@@ -1,3 +1,15 @@
+"""
+Provides build and test targets for JUnit 5.
+
+All of the test targets in this file support tags= and exclude_tags= parameters. These are
+translated to JUnit 5 @Tag filters.
+
+junit5_test_suite and junit5_test have the following naming convention:
+    ${base_name}+${tags[0]}+${tags[1]}-${exclude_tags[0]}-${exclude_tags[1]}
+
+This can be overridden by explicitly supplying name = "YourTestName" to the target.
+"""
+
 TEST_SIZES = [
     None,
     "small",
@@ -34,20 +46,21 @@ JUNIT5_RUNTIME_DEPS = [
     "//external:opentest4j",
 ]
 
-"""
-Create a junit5_dependency for each artifact under the component with the given version.
-"""
 def junit5_dependencies(component, artifacts, version):
+  """
+  Create a dependency for each artifact. Each will be available as
+  //external:junit5_${component}_${artifact}
+  """
   for artifact in artifacts:
     junit5_dependency(component, artifact, version)
 
-"""
-Create a dependency on a JUnit5 maven jar. It will be available as
-//external:junit5_component_artifact
-"""
 def junit5_dependency(component, artifact, version):
+  """
+  Create a dependency on a JUnit 5 maven jar. It will be available as
+  //external:junit5_${component}_${artifact}
+  """
   if not component in JUNIT5_COMPONENTS:
-    fail("%s is not a JUnit5 component." % component)
+    fail("%s is not a JUnit 5 component." % component)
 
   groupId = JUNIT5_GROUP_IDS[component]
   artifactId = JUNIT5_ARTIFACT_ID_PATTERNS[component] % artifact
@@ -62,10 +75,10 @@ def junit5_dependency(component, artifact, version):
       actual = "@%s//jar" % maven_name,
   )
 
-"""
-Automatically adds JUnit5 compile dependencies so you don't have to.
-"""
 def junit5_test_library(name, srcs, deps=[], _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
+  """
+  Automatically adds JUnit 5 compile dependencies so you don't have to.
+  """
   native.java_library(
       name = name,
       srcs = srcs,
@@ -75,16 +88,32 @@ def junit5_test_library(name, srcs, deps=[], _junit5_test_deps=JUNIT5_TEST_DEPS,
   )
 
 def junit5_test_suites(sizes=TEST_SIZES, **kwargs):
+  """
+  Create a test suite for the specified test sizes. Defaults to creating one test suite for every
+  possible test size, including unlabelled.
+  """
   for size in sizes:
     junit5_test_suite(size, **kwargs)
 
-def junit5_test_suite(size, deps=[], runtime_deps=[], src_dir=None, **kwargs):
-  if not size in TEST_SIZES:
+def junit5_test_suite(size, src_dir=None, **kwargs):
+  """
+  Create a test suite that will run every test of the given size that is included in this target,
+  and in this package.
+
+  If size is None, then this suite will run unlabelled tests. If size is "all", then this suite will
+  run every test regardless of size.
+
+  If a test is tagged with more than one size, it will only run with the larger size.
+  """
+  if size != "all" and not size in TEST_SIZES:
     fail("%s is not a valid test size." % size)
 
   selection_flags = [
     "--select-package %s" % __get_java_package(PACKAGE_NAME, src_dir)
-  ] + __get_size_flags(size)
+  ]
+
+  if size != "all":
+    selection_flags += __get_size_flags(size)
 
   size_string = size or "Unlabelled"
   suite_name = size_string.capitalize() + "Tests"
@@ -92,12 +121,14 @@ def junit5_test_suite(size, deps=[], runtime_deps=[], src_dir=None, **kwargs):
   __junit5_test(
       base_name = suite_name,
       selection_flags = selection_flags,
-      size = size,
-      runtime_deps = deps + runtime_deps,
+      size = size if size != "all" else None,
       **kwargs
   )
 
-def junit5_test(base_name, srcs, deps=[], src_dir=None, _junit5_test_deps=JUNIT5_TEST_DEPS, **kwargs):
+def junit5_test(base_name, srcs, src_dir=None, **kwargs):
+  """
+  Run the JUnit 5 tests in srcs.
+  """
   java_package = __get_java_package(PACKAGE_NAME, src_dir)
   class_names = __get_class_names(java_package, srcs)
   selection_flags = [ "--select-class %s" % class_name for class_name in class_names ]
@@ -106,7 +137,6 @@ def junit5_test(base_name, srcs, deps=[], src_dir=None, _junit5_test_deps=JUNIT5
       base_name = base_name,
       selection_flags = selection_flags,
       srcs = srcs,
-      deps = deps + _junit5_test_deps,
       **kwargs
   )
 
@@ -116,7 +146,9 @@ def __junit5_test(
     name=None,
     tags=[],
     exclude_tags=[],
-    runtime_deps = [],
+    deps=[],
+    runtime_deps=[],
+    _junit5_test_deps=JUNIT5_TEST_DEPS,
     _junit5_runtime_deps=JUNIT5_RUNTIME_DEPS,
     **kwargs):
   if name == None:
@@ -134,6 +166,7 @@ def __junit5_test(
       args = flags,
       main_class = "org.junit.platform.console.ConsoleLauncher",
       use_testrunner = False,
+      deps = deps + _junit5_test_deps if deps else None,
       runtime_deps = runtime_deps + _junit5_runtime_deps,
       **kwargs
   )
