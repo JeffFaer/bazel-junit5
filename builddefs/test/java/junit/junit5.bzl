@@ -77,10 +77,11 @@ def junit5_test_library(srcs, name=None, deps=[], _junit5_test_deps=JUNIT5_TEST_
       **kwargs
   )
 
-def junit5_test_suites(deps, **kwargs):
-  junit5_test_suite(None, deps, **kwargs)
+def junit5_test_suites(deps, sizes=None, **kwargs):
+  if sizes == None:
+    sizes = TEST_SIZES + [ None ]
 
-  for size in TEST_SIZES:
+  for size in sizes:
     junit5_test_suite(size, deps, **kwargs)
 
 def junit5_test_suite(size, deps, tags=[], exclude_tags=[], src_dir=None, _junit5_runtime_deps=JUNIT5_RUNTIME_DEPS):
